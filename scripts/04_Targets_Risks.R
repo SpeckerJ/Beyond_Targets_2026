@@ -6,7 +6,7 @@ library(janitor)
 # ============================================= #
 
 # Read in raw data files
-raw_norman <- read.csv("raw_data/risk_analysis/NORMAN_PNEC_20260322.csv")
+raw_norman <- read_excel("raw_data/risk_analysis/NORMAN_PNEC_20260322.xlsx")
 name_lookup <- read_excel("raw_data/risk_analysis/replace_names.xlsx")
 raw_data_pgv <- read_excel("raw_data/risk_analysis/pgv_targets_2025-10-18.xlsx")
 
@@ -26,7 +26,7 @@ df_norman <- raw_norman %>%
       compound %in% name_lookup$old_name ~ name_lookup$new_name[match(compound, name_lookup$old_name)],
       TRUE ~ compound
     ),
-    pnec_ngL = pnec_ugL * 1000
+    pnec_ngL = as.numeric(pnec_ugL) * 1000
   ) %>%
   select(-pnec_ugL)
 
@@ -52,8 +52,9 @@ df_pgv <- df_pgv %>% mutate(compound = case_when(
 ## ============================================== #
 
 # Assign to new df, convert class to title case
-df_OMP_risks <- df_OMP %>% # df_OMP was generated in the target_analysis script
-  select(c(analyte_name, sample_date, treatment, replicate, quantity_EF, class)) %>% mutate(class = str_to_title(class))
+df_OMP_risks <- df_OMP %>% # df_OMP was generated in the script 01_Target_Analysis
+  select(c(analyte_name, sample_date, treatment, replicate, quantity_EF, class)) %>% mutate(class = str_to_title(class)) %>% 
+  mutate(analyte_name = ifelse(analyte_name == "1-Phenylurea", "N-Phenylurea", analyte_name))
 
 # ============================================= #
 # Data Analysis                              ####
@@ -85,18 +86,32 @@ df_env_risks_mean <- df_risks_env %>%
   ungroup() %>%
   arrange(desc(mean_RQ))
 
-# Calculate mean RQs per treatment for RQ above 0.1
-# Note: Table 3 in the manuscript
-tbl03 <- df_env_risks_mean %>%
-  filter(mean_RQ > 0.1) %>%
-  group_by(treatment) %>%
-  summarise(
-    sum_RQ = round(sum(mean_RQ)),
-    mean.RQ = round(mean(mean_RQ), digits = 2),
-    sd.RQ = round(sd(mean_RQ), digits = 2),
-    n = n()
+# Calculate total RQs per treatment and day
+df_risk_removal <- df_env_risks_mean %>% 
+  filter(!is.na(sample_date)) %>% 
+  group_by(sample_date, treatment) %>% 
+  summarise(sum_RQ = sum(mean_RQ, na.rm = TRUE)) %>% 
+  group_by(sample_date) %>% 
+  mutate(baseline = sum_RQ[treatment=="WWTP-E"],
+         risk_rem = (sum_RQ - baseline)/baseline * -100) %>% 
+  select(-baseline)
+df_risk_removal %>% filter(treatment == "GAC" | sample_date == "19.07.2022" & treatment == "CMF")
+
+# Plot total RQs per treatment and day
+total_RQ <- df_risk_removal %>% 
+  ggplot(aes(x = treatment, y = sum_RQ)) +
+  geom_point() +
+  scale_y_log10() +
+  labs(x = NULL,
+       y = "Total RQ") +
+  facet_wrap(. ~ sample_date) +
+  theme(
+    legend.position = "bottom",
+    strip.text.x = element_text(face = "bold"),
+    axis.text.x = element_text(angle = 40, hjust = 1)
   )
-tbl03
+total_RQ
+
 
 # Which compounds are above RQ 0.1 after GAC?
 df_env_risks_mean %>%
@@ -121,9 +136,10 @@ df_env_risks_mean %>%
   arrange(desc(n))
 
 # Prepare data for supplementary information (SW)
-tabSI_SW <- left_join(df_env_risks_mean, select(df_norman, 1, 5), by = c("analyte_name" = "compound"), relationship = "many-to-many") %>%
+tabSI_SW <- left_join(df_env_risks_mean, select(df_norman, -2, -3), by = c("analyte_name" = "compound"), relationship = "many-to-many") %>%
   distinct(analyte_name, sample_date, treatment, .keep_all = TRUE) %>%
-  filter(mean_RQ != 0)
+  filter(mean_RQ != 0) %>% 
+  relocate(pnec_ngL, .after = mean_RQ_DF10)
 
 # Calculate mean RQ for compound x per treatment
 comp_x <- "Venlafaxine"
@@ -189,7 +205,7 @@ tabSI_DW <- left_join(df_dw_RQ_mean, select(df_risks_dw, 1, 7), by = "analyte_na
 ## Source water for drinking water            ####
 ## ============================================= #
 
-df_source_w <- df_sum_analyte %>% # df_sum_analyte was generated in the target_analysis script
+df_source_w <- df_sum_analyte %>% # df_sum_analyte was generated in the script 01_Target_Analysis
   mutate(
     SW_limit_ngl = 1000,
     mean_SW_exceedance = mean / SW_limit_ngl

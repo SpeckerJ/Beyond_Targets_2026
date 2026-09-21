@@ -41,6 +41,7 @@ save_image <- function(
 
 
 # Save df ####
+# In case the generated df/tables leads to a wrong output in excel, replace write.csv by write.csv2. Potentially with the option 'fileEncoding = "UTF-8"'
 save_df_csv <- function(df, name, na_as_blank = FALSE) {
   
   # extract extension

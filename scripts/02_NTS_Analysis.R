@@ -2,11 +2,12 @@ library(tidyverse)
 library(RColorBrewer)
 library(patchwork)
 library(forcats)
+library(scales)
 
 
-## ============================================= #
-# Main Manuscript                             ####
-## ============================================= #
+## ============================================== #
+# Main Manuscript                              ####
+## ============================================== #
 
 ## ============================================== #
 ## Read in data                                ####
@@ -16,8 +17,15 @@ library(forcats)
 raw_data_folder <- list.files("raw_data/NTS", full.names = TRUE)
 raw_data_file_ID4 <- raw_data_folder[str_detect(raw_data_folder, "ID1234")]
 raw_data_file_NTS <- raw_data_folder[str_detect(raw_data_folder, "total")]
+raw_data_file_NTS_10K <- raw_data_folder[str_detect(raw_data_folder, "10000")]
 raw_data_ID4 <- read.csv(raw_data_file_ID4)
-raw_data_NTS <- read.csv(raw_data_file_NTS)
+raw_data_NTS <- read.csv(raw_data_file_NTS) # Noise Threshold = 2250
+
+# Please Note:
+# Full NTS data for noise threshold 10000 (10K), specified below.
+# If replaced by data set above, then please also note the
+# additional comments throughout the script!
+# raw_data_NTS <- read.csv(raw_data_file_NTS_10K)
 
 # assign to working df
 df_raw_ID4 <- raw_data_ID4
@@ -27,10 +35,10 @@ df_raw_NTS <- raw_data_NTS
 # Note: The WWTP effluent is named here WWTP_E and not WWTP-E to avoid issues with column names
 lookup_dates <- data.frame(
   day = c(paste0("D", 1:6)),
-  date = paste0(c("19.07.", "26.07.", "16.08.", "26.08.", "15.09.", "15.10."), "2022")
+  date = paste0(c("19.07.", "26.07.", "16.08.", "26.08.", "15.09.", "19.10."), "2022")
 )
 date_order <- lookup_dates$date
-lookup_treatmeans <- data.frame(
+lookup_treatments <- data.frame(
   s = paste0("S", rep(1:12)),
   treatment = paste0(rep(c(
     "WWTP_E",
@@ -40,6 +48,7 @@ lookup_treatmeans <- data.frame(
   ), each = 3))
 )
 treat_order <- c("WWTP_E", "O3", "AO", "CMF", "GAC")
+
 
 ## ============================================== #
 ## Data Wrangling                              ####
@@ -70,7 +79,7 @@ df_nts <- df_nts %>%
     polarity = str_extract(sample, "(?<=_)(Pos|Neg)(?=_)")
   ) %>%
   left_join(lookup_dates, by = "day") %>%
-  left_join(lookup_treatmeans, by = "s") %>%
+  left_join(lookup_treatments, by = "s") %>%
   mutate(treatment = case_when(
     day %in% c("D5", "D6") & s %in% c("S4", "S5", "S6") ~ "AO",
     treatment == "Eff" ~ "WWTP_E",
@@ -110,9 +119,9 @@ df_TPs <- df_nts %>%
   filter(str_detect(susp_name, regex("-[A-Za-z0-9]*TP\\d+", ignore_case = TRUE)))
 
 
-## ============================================== #
-## Trends Wide - Preparation                   ####
-## ============================================== #
+### ============================================== #
+### Trends Wide - Preparation                   ####
+### ============================================== #
 
 # Prepare data for wide-format trend analysis
 df_prepared <- df_nts %>%
@@ -163,9 +172,9 @@ df_last_treat <- df_obs %>%
   ) %>%
   ungroup()
 
-## ============================================== #
-## Assign trends - Wide                        ####
-## ============================================== #
+#### ============================================== #
+#### Assign trends - Wide                        ####
+#### ============================================== #
 
 # Pivot to wide format for trend analysis
 df_wide <- df_last_treat %>%
@@ -224,9 +233,9 @@ df_wide_trend <- df_wide_change %>%
     )
   )
 
-## ============================================== #
-## Combine wide dfs                            ####
-## ============================================== #
+#### ============================================== #
+#### Combine wide dfs                            ####
+#### ============================================== #
 
 # Combine wide-format data frames for suspects, TPs, and full NTS
 df_general_trend_suspects_wide <- df_wide_trend %>%
@@ -238,20 +247,22 @@ df_general_trend_TP_wide <- df_wide_trend %>%
 df_general_trend_suspects_NTS_wide <- df_wide_trend %>% mutate(set = "Full_NTS")
 df_general_trend_wide <- rbind(df_general_trend_suspects_wide, df_general_trend_suspects_NTS_wide, df_general_trend_TP_wide) %>% select(-matches(".\\."))
 
-
 ## ============================================== #
 ## Trends Long - Preparation                   ####
 ## ============================================== #
 
 # Re-prepare data for long-format trend analysis
 df_prepared <- df_nts %>%
-  select(group, ret, mz, date, treatment, assigned_pol_mean, intensity)
+  select(group, ret, mz, date, treatment, assigned_pol_mean, intensity, susp_name)
 
 df_mean_intensity <- df_prepared %>%
   group_by(date, group, assigned_pol_mean, treatment) %>%
   mutate(intensity = mean(intensity, na.rm = TRUE)) %>%
   ungroup() %>%
   distinct(date, group, assigned_pol_mean, treatment, .keep_all = TRUE)
+
+# Define intermediate object for spearman rank correlation to avoid issues with df_mean_intensity in wide format
+df_mean_intensity_spearman <- df_mean_intensity
 
 df_obs <- df_mean_intensity %>%
   arrange(date, group, assigned_pol_mean, treatment) %>%
@@ -304,9 +315,9 @@ df_presence_change <- df_last_treat %>%
   )
 
 
-## ============================================== #
-## Assigning Trends - Long                      ####
-## ============================================== #
+### ============================================== #
+### Assigning Trends - Long                      ####
+### ============================================== #
 
 thr <- 0.35
 
@@ -346,9 +357,9 @@ df_general_trend_TP_long <- df_general_trend_long %>%
 df_general_trend_suspects_NTS_long <- df_general_trend_long %>% mutate(set = "Full_NTS")
 df_general_trend_long <- rbind(df_general_trend_suspects_long, df_general_trend_suspects_NTS_long, df_general_trend_TP_long) %>% select(-matches(".\\."))
 
-## =============================================== #
-## Specify NF trends further - Long             ####
-## =============================================== #
+### =============================================== #
+### Specify NF trends further - Long             ####
+### =============================================== #
 
 # Further classify newly found (NF) trends
 df_NF_trends <- df_general_trend_long %>%
@@ -442,8 +453,10 @@ df_feat_i_tot <- df_general_trend_long %>%
 ## =============================================== #
 
 ## How many trends follow each pattern - wide
+# Note: Control which data set is currently in use!
 df_a1 <- df_general_trend_wide %>%
-  filter(set == "Suspect") %>%
+  filter(set == "Suspect") %>% # For analysis with noise thr at 22500
+  # filter(set == "Full_NTS") %>% # For analysis with noise thr at 10K
   group_by(date, trend, set) %>%
   summarise(n = n(), .groups = "drop") %>%
   group_by(date, set) %>%
@@ -472,7 +485,6 @@ df_b1 <- df_general_trend_long %>%
     check = sum(frac)
   )
 
-
 df_b2 <- df_NF_trends %>%
   filter(treatment != "WWTP_E" & trend_s != "Absent") %>%
   group_by(treatment, set, trend_s) %>%
@@ -491,7 +503,7 @@ df_b2 <- df_NF_trends %>%
 # Filter for features present in O3/AO and remove last day which contains only data for PFAS CALUX
 df_feat_rem_O3AO <- df_general_trend_long %>%
   filter(treatment %in% c("O3", "AO") & trend == "Removed" &
-    date != "15.10.2022") %>%
+    date != "19.10.2022") %>%
   select(group, date, intensity) %>%
   mutate(presence = ifelse(intensity == 0, 1, 0)) %>%
   pivot_wider(names_from = date, values_from = presence, values_fn = mean) %>%
@@ -504,41 +516,51 @@ df_fgroups_rem_O3AO <- df_feat_rem_O3AO %>%
   filter(total_obs == 5) %>%
   pull(group)
 
+## =============================================== #
+## Removal of features - Overview               ####
+## =============================================== #
+
+df_b1 %>% filter(trend == "Removed") %>% group_by(treatment, set, trend) %>% 
+  arrange(set) %>% mutate(frac = round(frac * 100, digits = 0))
 
 ## =============================================== #
 ## Plot trends - wide                           ####
 ## =============================================== #
+
+# Control which underlying NTS data set (i.e. 22500 vs 10K) is currently used! 
 
 # Define trend order and color palettes
 trend_order <- rev(c("Removed", "NF", "Unchanged", "Increase", "Decrease"))
 trend_order_a2 <- c("NF", "NF - Pers.", "Persistent", "NF - Rem.", "Removed")
 
 shared_colors <- c(
-  "Removed" = brewer.pal(n = 8, name = "Paired")[1],
+  "Removed" = brewer.pal(n = 8, name = "Paired")[3],
   "Increase" = brewer.pal(n = 8, name = "Paired")[2],
-  "NF" = brewer.pal(n = 8, name = "Paired")[3],
+  "NF" = brewer.pal(n = 8, name = "Paired")[1],
   "Decrease" = brewer.pal(n = 8, name = "Paired")[5],
   "Unchanged" = brewer.pal(n = 8, name = "Paired")[6]
 )
 
 shared_colors2 <- c(
-  "Removed"     = brewer.pal(n = 8, name = "Paired")[1],
+  "Removed"     = brewer.pal(n = 8, name = "Paired")[3],
   "NF - Rem."   = brewer.pal(n = 8, name = "Paired")[2],
-  "NF"          = brewer.pal(n = 8, name = "Paired")[3],
+  "NF"          = brewer.pal(n = 8, name = "Paired")[1],
   "NF - Pers."  = brewer.pal(n = 8, name = "Paired")[5],
   "Persistent"  = brewer.pal(n = 8, name = "Paired")[6]
 )
+display.brewer.all(colorblindFriendly = TRUE)
 
 # Stacked barplot of trends per date
 p1_trends <- df_a1 %>%
-  filter(set == "Suspect") %>%
+  filter(set == "Suspect") %>% # Figure 2; Noise threshold = 2250
+  # filter(set == "Full_NTS") %>% # Figure S8; Noise threshold = 10000
   mutate(
     trend = factor(trend, levels = trend_order),
     frac = frac * 100
   ) %>%
   ggplot(aes(x = date, y = frac, fill = trend, label = n)) +
   geom_bar(stat = "identity", col = "black", position = "stack", linewidth = 0.5) +
-  geom_text(size = 5, position = position_stack(vjust = 0.5)) +
+  geom_text(size = 6, position = position_stack(vjust = 0.5)) +
   scale_fill_manual(values = shared_colors) +
   labs(
     x = NULL,
@@ -547,24 +569,27 @@ p1_trends <- df_a1 %>%
   ) +
   theme(
     axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
-    legend.position = "bottom"
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank(),
+    legend.position = "nonte"
   ) +
   guides(fill = guide_legend(nrow = 2))
 p1_trends
 
 # Stacked barplot of trends per treatment
-set_to_plot <- "Suspect"
+set_to_plot <- "Suspect" # Figure 2; Noise threshold = 2250
+# set_to_plot <- "Full_NTS" # Figure S8; Noise threshold = 10000
 p2_trends <- df_b1 %>%
   mutate(
     trend = factor(trend, levels = trend_order),
     frac = frac * 100
   ) %>%
-  filter(set == set_to_plot) %>%
+  filter(set == set_to_plot) %>% #
   ggplot(
     aes(x = treatment, y = frac, fill = trend, label = n)
   ) +
   geom_bar(stat = "identity", position = "stack", col = "black", linewidth = 0.5) +
-  geom_text(size = 5, position = position_stack(vjust = 0.5)) +
+  geom_text(size = 6, position = position_stack(vjust = 0.5)) +
   scale_fill_manual(values = shared_colors) +
   scale_x_discrete(
     labels = c(
@@ -596,7 +621,7 @@ p3_trends <- df_b2 %>%
     aes(x = treatment, y = frac, fill = trend_s, label = n)
   ) +
   geom_bar(stat = "identity", position = "stack", col = "black", linewidth = 0.5) +
-  geom_text(size = 5, position = position_stack(vjust = 0.5)) +
+  geom_text(size = 6, position = position_stack(vjust = 0.5)) +
   scale_fill_manual(values = shared_colors2) + # Use shared colors
   
   scale_x_discrete(
@@ -619,13 +644,13 @@ p3_trends <- df_b2 %>%
 p3_trends
 
 
-## ============================================== #
-# Supplementary Information                    ####
-## ============================================== #
+## =============================================== #
+# Supplementary Information                     ####
+## =============================================== #
 
-## ============================================== #
+## =============================================== #
 ## Histogram - Removal                          ####
-## ============================================== #
+## =============================================== #
 
 p_NTS_histo <- df_general_trend_long %>%
   filter(treatment != "WWTP_E" &
@@ -643,9 +668,9 @@ p_NTS_histo <- df_general_trend_long %>%
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 p_NTS_histo
 
-## =============================================== #
+## ================================================ #
 ## Feature removal                               ####
-## =============================================== #
+## ================================================ #
 
 p_NTS_boxplot <- df_general_trend_long %>%
   filter(treatment != "WWTP_E" &
@@ -672,12 +697,12 @@ p_NTS_boxplot
 ## Noise Threshold                              ####
 ## =============================================== #
 
-# read in raw data ##
+# read in raw data
 raw_data_file_noise_thr <- raw_data_folder[str_detect(raw_data_folder, "noise_thr")]
 
 raw_data_noise_thr <- read.csv(raw_data_file_noise_thr)
 
-# Data wrangling ##
+# Data wrangling
 raw_data_noise_thr <- raw_data_noise_thr %>% mutate(par_set = case_when(
   par_set == "a" ~ "Default",
   par_set == "b" & noise_thr == 1000 ~ "Ore. et al. 2025",
@@ -696,7 +721,7 @@ df_long <- raw_data_noise_thr %>%
 # Color palette
 my_cols <- brewer.pal(3, "Set1")[c(1, 2)] # red, blue
 
-# individual plots #
+# individual plots
 p1_total_features <- df_long %>%
   filter(variable == "total_features") %>%
   ggplot(aes(x = noise_thr, y = value, shape = par_set, colour = mode)) +
@@ -753,9 +778,9 @@ p2_avg_features_final <- p2_avg_features +
 p3_data_size_final <- p3_data_size +
   theme(plot.title = element_text(size = 22, hjust = 0.5, face = "bold"), legend.position = "bottom")
 
-## =============================================== #
-# Detected feature numbers and intensities      ####
-## =============================================== #
+## ================================================ #
+## Detected feature numbers and intensities      ####
+## ================================================ #
 p_feat_n <- df_feat_n_long %>%
   mutate(treatment = fct_recode(treatment, "WWTP-E" = "WWTP_E")) %>%
   ggplot(aes(x = treatment, y = n, fill = set)) +
@@ -792,3 +817,209 @@ p_feat_i <- df_feat_i_tot %>%
     legend.position = "none"
   )
 p_feat_i
+
+## =============================================== #
+## Sensitivity Analysis - Trend Threshold      #####
+## =============================================== #
+
+### =============================================== #
+### Classification by day                        ####
+### =============================================== #
+treatments <- c("WWTP_E", "O3", "AO", "CMF", "GAC")
+thresholds <- tibble(
+  thr = seq(0, 1, by = 0.05)
+)
+
+df_wide_trend_sens <- df_wide_change %>%
+  cross_join(thresholds) %>%
+  mutate(
+    trend = case_when(
+      present == first_obs & first_obs != "WWTP_E" &
+        is.infinite(rel_change) ~ "NF",
+      
+      is.infinite(rel_change) ~ "NF",
+      
+      is.na(rel_change) & end_val == 0 ~ "Removed",
+      
+      rel_change == 1.0 ~ "Removed",
+      
+      abs(rel_change) < thr ~ "Unchanged",
+      
+      rel_change > 0 ~ "Decrease",
+      
+      rel_change < 0 ~ "Increase",
+      
+      TRUE ~ NA_character_
+    )
+  )
+
+# Combine wide-format data frames for suspects, TPs, and full NTS
+df_general_trend_suspects_wide_sens <- df_wide_trend_sens %>%
+  filter(group %in% suspect_features$group) %>%
+  mutate(set = "Suspect")
+df_general_trend_TP_wide_sens <- df_wide_trend_sens %>%
+  filter(group %in% TP_features$group) %>%
+  mutate(set = "TP")
+df_general_trend_suspects_NTS_wide_sens <- df_wide_trend_sens %>% mutate(set = "Full_NTS")
+df_wide_trend_sens <- rbind(df_general_trend_suspects_wide_sens,
+                            df_general_trend_suspects_NTS_wide_sens,
+                            df_general_trend_TP_wide_sens) %>% select(-matches(".\\."))
+
+
+
+df_sens_summ_day <- df_wide_trend_sens %>% 
+  count(thr, trend, date, set) %>% 
+  group_by(thr, set, date) %>% 
+  mutate(frac = n / sum(n) * 100) %>% 
+  ungroup()
+
+df_sens_summ_all <- df_wide_trend_sens %>% 
+  count(thr, trend, set) %>% 
+  group_by(thr, set) %>% 
+  mutate(frac = n / sum(n) *100) %>% 
+  ungroup()
+
+p_sens_sets <- df_sens_summ_all %>% 
+  mutate(set = ifelse(set == "Full_NTS", "All Features", set)) %>% 
+  ggplot(aes(x = thr, y = frac, col = trend)) +
+  geom_vline(xintercept = 0.35, linetype = "dashed") +
+  geom_line(linewidth = 1.5) +
+  scale_color_manual(values = shared_colors) +
+  scale_x_continuous(
+    breaks = c(0, 0.25, 0.5, 0.75, 1),
+    labels = c("0", "", "0.5", "", "1")
+  ) +
+  labs(x = "Classification threshold",
+       y = "Relative Proportion (%)",
+       col = NULL) +
+  facet_wrap(. ~ set) +
+  theme(legend.position = "bottom",
+        legend.key = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "grey98")
+  )
+p_sens_sets
+
+p_sens_day <- df_sens_summ_day %>% 
+  filter(set == "Suspect") %>% 
+  ggplot(aes(x = thr, y = frac, col = trend)) +
+  geom_vline(xintercept = 0.35, linetype = "dashed") +
+  geom_line(linewidth = 1.5) +
+  scale_color_manual(values = shared_colors) +
+  scale_x_continuous(
+    breaks = c(0, 0.25, 0.5, 0.75, 1),
+    labels = c("0", "", "0.5", "", "1")
+  ) +
+  labs(x = "Classification threshold",
+       y = "Relative Proportion (%)",
+       col = NULL) +
+  facet_grid(. ~ date) +
+  theme(legend.position = "bottom",
+        legend.key = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "grey98")
+  )
+p_sens_day
+
+### =============================================== #
+### Classification by treatment                  ####
+### =============================================== #
+df_trend_sens <- df_presence_change %>%
+  group_by(date, group, assigned_pol_mean) %>%
+  cross_join(thresholds) %>%
+  mutate(
+    # Assign trend
+    # Per treatment step
+    trend = case_when(
+      rel_rem_overall == 1.0 & treatment == "CMF" &
+        date == "19.07.2022" & prev_intensity == 0 ~ "Absent",
+      rel_rem_step == 1.0 & treatment == "GAC" ~ "Removed",
+      rel_rem_step == 1.0 & treatment == "CMF" ~ "Removed",
+      rel_rem_overall == 1.0 & rel_rem_step == 1.0 ~ "Removed",
+      present == FALSE & is.na(first_obs) & is.na(last_obs) ~ "Absent",
+      present == FALSE & is.na(rel_rem_overall) ~ "Absent",
+      rel_rem_overall == 1.0 & is.na(rel_rem_step) ~ "Absent",
+      first_obs == "WWTP_E" & rel_rem_overall == 0 ~ "start_WWTP_E",
+      treatment == first_obs & first_obs != "WWTP_E" &
+        is.infinite(rel_rem_overall) ~ "NF",
+      abs(rel_rem_step) < thr ~ "Unchanged",
+      rel_rem_step > 0 ~ "Decrease",
+      is.na(rel_rem_overall) ~ "Unchanged",
+      rel_rem_step < 0 ~ "Increase",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  ungroup()
+
+trend_sens_suspects <- df_trend_sens %>%
+  filter(group %in% suspect_features$group) %>%
+  mutate(set = "Suspect")
+
+trend_sens_TP <- df_trend_sens %>%
+  filter(group %in% TP_features$group) %>%
+  mutate(set = "TP")
+
+trend_sens_NTS <- df_trend_sens %>%
+  mutate(set = "Full_NTS")
+
+df_trend_sens <- bind_rows(
+  trend_sens_suspects,
+  trend_sens_NTS,
+  trend_sens_TP
+) %>%
+  select(-matches(".\\."))
+
+df_NF_trends_sens <- df_trend_sens %>% 
+  mutate(trend_s = case_when(
+    trend == "Absent" ~ "Absent",
+    trend == "start_WWTP_E" ~ "start_WWTP_E",
+    trend == "Removed" & is.na(rel_rem_step) ~ "Absent",
+    trend %in% c("Increase", "Decrease") &
+      is.infinite(rel_rem_step) &
+      last_obs == "CMF" &
+      date == "19.07.2022" ~ "NF - Pers.",
+    trend %in% c("NF") &
+      is.infinite(rel_rem_step) &
+      last_obs == "CMF" &
+      treatment == "CMF" &
+      date == "19.07.2022" ~ "NF - Pers.",
+    trend %in% c("Increase", "Decrease") &
+      is.infinite(rel_rem_step) ~ "NF",
+    trend == "Removed" & !is.na(rel_rem_step) ~ "Removed",
+    TRUE ~ trend,
+    trend == "Removed" ~ paste0("Absent")
+  ))
+
+df_sens_sum_treatment <- df_NF_trends_sens %>% 
+  filter(treatment != "WWTP_E", trend_s != "Absent") %>% 
+  count(thr, trend, treatment, set) %>% 
+  group_by(thr, treatment, set) %>% 
+  mutate(frac = n / sum(n) * 100) %>% 
+  ungroup()
+
+
+p_sens_sus_treatmens <- df_sens_sum_treatment %>% 
+  # mutate(set = ifelse(set == "Full_NTS", "All Features", set)) %>%
+  filter(set == "Suspect") %>% 
+  ggplot(aes(x = thr, y = frac, col = trend)) +
+  geom_vline(xintercept = 0.35, linetype = "dashed") +
+  geom_line(linetype = 1.5) +
+  scale_color_manual(values = shared_colors) +
+  scale_x_continuous(
+    breaks = c(0, 0.25, 0.5, 0.75, 1),
+    labels = c("0", "", "0.5", "", "1")
+  ) +
+  labs(x = "Classification threshold",
+       y = "Relative Proportion (%)",
+       col = NULL
+  ) +
+  facet_grid(. ~ treatment) +
+  theme(legend.position = "bottom",
+        legend.key = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_rect(fill = "grey98")
+  )
+p_sens_sus_treatmens

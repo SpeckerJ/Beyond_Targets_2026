@@ -122,4 +122,3 @@ anova(mod_log, lmer_chems)
 AIC(lmer_chems, mod_log) 
 BIC(lmer_chems, mod_log) 
 emmeans(mod_log, pairwise ~ treatment)  # Pairwise comparisons on log scale
-

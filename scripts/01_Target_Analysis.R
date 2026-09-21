@@ -8,8 +8,6 @@ library(scales)
 
 df_OMP_raw <- read_excel("raw_data/OMP/raw_OMP.xlsx")
 
-
-
 # ============================================= #
 # Data wrangling                             ####
 # ============================================= #
@@ -45,7 +43,7 @@ df_OMP_raw <- df_OMP_raw %>%
 
 # Order sample dates and treatments for consistent plotting
 sample_dates_order <- c("19.07.2022", "26.07.2022", "16.08.2022",
-                        "26.08.2022", "15.09.2022", "15.10.2022")
+                        "26.08.2022", "15.09.2022", "19.10.2022")
 treatment_order <- c("WWTP-E", "O3", "AO", "CMF", "GAC")
 df_OMP_raw <- df_OMP_raw %>% mutate(
   sample_date = factor(sample_date, levels = sample_dates_order),
@@ -56,6 +54,15 @@ df_OMP_raw <- df_OMP_raw %>% mutate(
 df_OMP <- df_OMP_raw %>%
   filter(TASQ_sample_type == "Sample") %>%
   filter(!is.na(sample_date))
+
+# Which OMP classes were detected?
+df_OMP %>% 
+  filter(quantity_raw != 0, TASQ_sample_type == "Sample") %>% 
+  group_by(class) %>%
+  distinct(analyte_name, .keep_all = TRUE) %>%
+  summarise(n = n()) %>%
+  mutate(total = sum(n),
+         contri = n / total * 100)
 
 # ============================================= #
 # Summary statistics                         #### 
@@ -289,19 +296,8 @@ pos <- position_dodge(width = 0.8)
 
 p1_SI <- ggplot(
   data = df_sum_analyte,
-  aes(x = treatment, y = mean, fill = sample_date)
-) +
-
-  # boxplots with dodging
+  aes(x = treatment, y = mean, fill = sample_date)) +
   geom_boxplot(position = pos) +
-  geom_point(
-    data = df_rem_total,
-    aes(x = treatment, y = sum_conc, fill = sample_date, group = sample_date),
-    position = pos,
-    shape = 22,
-    size = 5,
-    show.legend = FALSE
-  ) +
   labs(
     x = NULL,
     y = expression(paste("Concentration (ngL"^-1, ")")),
@@ -318,10 +314,13 @@ p1_SI <- ggplot(
   theme(
     plot.title = element_text(hjust = 0.5),
     axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
-    legend.text = element_text(size = 16),
-    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 15),
+    legend.title = element_text(size = 15),
     legend.key.size = unit(1, "cm"),
-    legend.position = "bottom"
+    legend.position = "none",
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "grey98")
   )
 p1_SI
 
@@ -345,44 +344,16 @@ p2_SI <- df_rem_analyte_day %>%
   theme(
     plot.title = element_text(hjust = 0.5),
     axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
-    legend.text = element_text(size = 16),
-    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 15),
+    legend.title = element_text(size = 15),
     legend.key.size = unit(1, "cm"),
-    legend.position = "bottom"
+    legend.position = "bottom",
+    legend.box.spacing = unit(0, "pt"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "grey98")
   )
 p2_SI
-
-# =========================================================== #
-# Cumulative concentrations per class - stacked barplot 
-
-OMP_pesticides <- df_OMP %>%
-  filter(class %in% c("pesticide")) %>%
-  mutate(fill_arg = case_when(
-    analyte_name %in% c("DEET", "MCPA") ~ analyte_name,
-    TRUE ~ "Other pesticides"
-  )) %>%
-  ggplot(aes(x = treatment, y = quantity_EF, fill = fill_arg)) +
-  geom_bar(stat = "identity", position = "stack") +
-  geom_hline(yintercept = 500, col = "black", linetype = "dashed") +
-  labs(
-    x = NULL,
-    y = expression(paste("Concentration (ngL"^-1, ")")),
-    fill = NULL,
-  ) +
-  scale_fill_brewer(palette = "Set2") +
-  scale_x_discrete(labels = c(
-    "O3" = expression(paste("O"[3]))
-  )) +
-  facet_wrap(. ~ sample_date) +
-  theme(
-    plot.title = element_text(hjust = 0.5),
-    legend.text = element_text(size = 16),
-    legend.title = element_text(size = 16),
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.key.size = unit(1, "cm"),
-    legend.position = "bottom"
-  )
-OMP_pesticides
 
 # =========================================================== #
 # Scatterplot of relative removal per analyte and treatment
@@ -418,3 +389,36 @@ figure_S3 <- df_rem_analyte_total %>%
     col = NULL
   )
 figure_S3
+
+
+# =========================================================== #
+# Cumulative concentrations per class - stacked barplot 
+
+figure_S19 <- df_OMP %>%
+  filter(class %in% c("pesticide")) %>%
+  mutate(fill_arg = case_when(
+    analyte_name %in% c("DEET", "MCPA") ~ analyte_name,
+    TRUE ~ "Other pesticides"
+  )) %>%
+  ggplot(aes(x = treatment, y = quantity_EF, fill = fill_arg)) +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_hline(yintercept = 500, col = "black", linetype = "dashed") +
+  labs(
+    x = NULL,
+    y = expression(paste("Concentration (ngL"^-1, ")")),
+    fill = NULL,
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  scale_x_discrete(labels = c(
+    "O3" = expression(paste("O"[3]))
+  )) +
+  facet_wrap(. ~ sample_date) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.key.size = unit(1, "cm"),
+    legend.position = "bottom"
+  )
+figure_S19
