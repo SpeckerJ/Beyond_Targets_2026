@@ -75,7 +75,7 @@ var_components <- as.data.frame(VarCorr(lmer_chems)) %>% select(-c(var1, var2))
 analyte_variance <- var_components$vcov[var_components$grp == "analyte_name"]
 residual_variance <- var_components$vcov[var_components$grp == "Residual"]
 
-# Analyte-to-analyte variability is large (~42% of residual variance)
+# Analyte-to-analyte variability is large (~34% of residual variance)
 explained_var <- round(analyte_variance / (analyte_variance + residual_variance) * 100)
 unexplained_var <- 100 - explained_var
 
@@ -116,7 +116,7 @@ abline(h = 0)
 
 
 # Compare log-transformed vs. original model
-# Result: Same qualitative outcome; log model fits better (lower AIC/BIC);
+# Result: Same qualitative outcome, except for AO; log model fits better (lower AIC/BIC);
 # original scale retained for interpretability
 anova(mod_log, lmer_chems) 
 AIC(lmer_chems, mod_log) 

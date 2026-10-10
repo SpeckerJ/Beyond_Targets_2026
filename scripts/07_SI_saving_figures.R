@@ -45,7 +45,7 @@ p1_SI / p2_SI +
       legend.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "cm")
     )
   )
-# save_image("figure_1.png", width = 10, height = 12)
+# save_image("figure_1.png", width = 10, height = 12.5)
 
 ### Table 2 ####
 target_data <- df_rem_total %>% rename("date" = "sample_date")
@@ -120,15 +120,15 @@ p1_point_EBT_SW + p2_point_EBT_DW +
 # Figures and Tables: Supplementary Information    ####
 # =================================================== #
 
-## Table S2.2 ####
+## Table S2.5 ####
 tabSI_SW
 # save_df_csv(tabSI_SW, "table_S2.2.csv")
 
-## Table S2.3 ####
+## Table S2.6 ####
 tabSI_DW
 # save_df_csv(tabSI_DW, "table_S2.3.csv")
 
-## Table S2.6 ####
+## Table S2.7 ####
 
 tbl_S2.6 <- detection_overall %>% select(-3) %>% 
   mutate(detected_days = case_when(
@@ -141,7 +141,7 @@ tbl_S2.6 <- detection_overall %>% select(-3) %>%
   ))
 # save_df_csv(tbl_S2.6, "table_S2.6.csv")
 
-## Table S2.7 ####
+## Table S2.8 ####
 tbl_S2.7 <- detection_treatment %>% select(-4) %>% 
   mutate(detected_days = case_when(
     
@@ -268,8 +268,6 @@ figure_S3 +
 # save_image("figure_S3.png", width = 8, height = 10)
 
 
-
-
 ## 3.3	 Non-target analysis – Detected and Removed Features ####
 
 ### Figure S4 ####
@@ -384,6 +382,7 @@ tbl_S2_11
 
 
 ## 3.5 Potential Risks Based on Target Analysis ####
+### Figure S15 ####
 total_RQ
 # save_image("Figure_S15.png")
 

@@ -2,7 +2,7 @@ library(tidyverse)
 library(janitor)
 
 # ============================================= #
-# Read in data                              ####
+# Read in data                               ####
 # ============================================= #
 
 # Read in raw data files
@@ -50,11 +50,12 @@ df_pgv <- df_pgv %>% mutate(compound = case_when(
 ## ============================================== #
 ## OMP target data                             ####
 ## ============================================== #
-
-# Assign to new df, convert class to title case
-df_OMP_risks <- df_OMP %>% # df_OMP was generated in the script 01_Target_Analysis
+df_OMP_risks <- df_OMP %>%
+  mutate(quant.for.summary = ifelse(limit != "quantity", 0, quantity_EF)) %>% 
+  filter(limit != ">C1") %>% 
   select(c(analyte_name, sample_date, treatment, replicate, quantity_EF, class)) %>% mutate(class = str_to_title(class)) %>% 
   mutate(analyte_name = ifelse(analyte_name == "1-Phenylurea", "N-Phenylurea", analyte_name))
+
 
 # ============================================= #
 # Data Analysis                              ####
@@ -112,13 +113,18 @@ total_RQ <- df_risk_removal %>%
   )
 total_RQ
 
+# Which compounds are above RQ 0.1?
+df_env_risks_mean %>%
+  filter(mean_RQ >= 0.1) %>%
+  distinct(analyte_name) %>%
+  arrange((.))
 
 # Which compounds are above RQ 0.1 after GAC?
 df_env_risks_mean %>%
   filter(mean_RQ >= 0.1) %>%
   filter(treatment == "GAC") %>%
   distinct(analyte_name) %>%
-  arrange(desc(.))
+  arrange((.))
 
 # On how many days are those compounds above RQ 0.1 after GAC?
 df_env_risks_mean %>%
@@ -182,7 +188,7 @@ df_dw_RQ_mean <- df_risks_dw %>%
     mean_RQ = round(mean(RQ, na.rm = TRUE), digits = 4),
     sd_RQ = round(sd(RQ, na.rm = TRUE), digits = 4),
     rsd_RQ = round(sd_RQ / mean_RQ * 100, digits = 4),
-    mean_RQ_DF10 = round(mean(RQ_DF10, na.rm = TRUE), digits = 4)
+    mean_RQ_DF10 = round(mean(RQ_DF10, na.rm = TRUE), digits = 5)
   ) %>%
   ungroup() %>%
   arrange(desc(mean_RQ))
